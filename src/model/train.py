@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 project_root = os.path.join(os.path.dirname(__file__), '../..')
 sys.path.append(os.path.abspath(project_root))
 
-from MegaBatchIterableDataset import MegaBatchIterableDataset
+from TurboDataset import TurboDataset
 from model_factory import get_shared_parser, build_model
 
 
@@ -275,28 +275,28 @@ def run(args):
     print(f"[INIT] Chargement des classes...")
     with open(args.class_map, 'r') as f: loaded_classes = json.load(f)
 
-    # Création des Datasets
-    print(f"[INIT] Préparation des MegaBatchIterableDatasets...")
+    # 5. Chargement des Données
+    print(f"[INIT] Préparation des TurboDatasets (Format .npy)...")
 
     # Création du Dataset d'entraînement
-    train_ds = MegaBatchIterableDataset(
+    mb_size = args.batch_size * args.mega_batch_factor
+
+    # Création du Dataset d'entraînement
+    train_ds = TurboDataset(
         data_path=args.train_data,
-        classes_list=loaded_classes,
         batch_size=args.batch_size,
-        mega_batch_factor=args.mega_batch_factor,
-        shuffle=True,
+        mega_batch_size=mb_size,
         use_static_padding=args.use_static_padding
     )
 
     # Création du Dataset de validation
-    val_ds = MegaBatchIterableDataset(
+    val_ds = TurboDataset(
         data_path=args.val_data, 
-        classes_list=loaded_classes,
         batch_size=args.batch_size,
-        mega_batch_factor=args.mega_batch_factor,
-        shuffle=False,
+        mega_batch_size=mb_size,
         use_static_padding=args.use_static_padding
     )
+
 
     # Création des DataLoaders
     # IMPORTANT : batch_size=None car le Dataset renvoie déjà des batchs formés
@@ -306,7 +306,7 @@ def run(args):
         num_workers=args.workers, 
         pin_memory=True, 
         persistent_workers=(args.workers > 0), 
-        prefetch_factor=8
+        prefetch_factor=2 # Réduit car les shards sont déjà massifs (8k)
     )
 
     val_loader = DataLoader(
@@ -315,7 +315,7 @@ def run(args):
         num_workers=args.workers, 
         pin_memory=True, 
         persistent_workers=(args.workers > 0), 
-        prefetch_factor=8
+        prefetch_factor=2
     )
 
     # 6. Création du Modèle
